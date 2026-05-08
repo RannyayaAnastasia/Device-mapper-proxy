@@ -1,1 +1,210 @@
-Device Mapper Proxy
+# Device Mapper Proxy (dmp) — Kernel Module
+
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+[![Platform: Linux Kernel](https://img.shields.io/badge/Kernel-6.18.13-blue)](https://www.kernel.org)
+
+A Linux kernel module implementing a Device Mapper target called **dmp** (device mapper proxy). The module creates virtual block devices on top of existing physical block devices and transparently proxies all I/O requests, while simultaneously collecting I/O operation statistics.
+
+---
+
+## 📊 Supported Statistics
+
+Statistics are available in real time via the `sysfs` interface:
+
+| Metric | Description |
+|--------|-------------|
+| `read: reqs` | Number of read requests |
+| `read: avg size` | Average read block size (bytes) |
+| `write: reqs` | Number of write requests |
+| `write: avg size` | Average write block size (bytes) |
+| `total: reqs` | Total number of requests |
+| `total: avg size` | Average block size (all operations) |
+
+Example output:
+```bash
+$ cat /sys/module/dmp/stat/volumes
+read: reqs: 500 avg size: 4096
+write: reqs: 100 avg size: 4096
+total: reqs: 600 avg size: 4096
+```
+
+---
+
+## Requirements
+
+- Linux kernel **6.18.13** (with Device Mapper support)
+- Kernel header files (`linux-headers`)
+- Utilities: `dmsetup`, `insmod`, `rmmod`
+- Superuser privileges (root)
+
+---
+
+## Building the Module
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/<your-username>/Device-mapper-proxy.git
+cd Device-mapper-proxy
+```
+
+### 2. Build
+```bash
+make
+```
+
+Result: `dmp.ko` — compiled kernel module.
+
+### 3. Load the Module
+```bash
+sudo insmod dmp.ko
+```
+
+Verify loading:
+```bash
+lsmod | grep dmp
+dmesg | tail -20
+```
+
+---
+
+## Testing and Usage
+
+### Step 1: Prepare a Physical Block Device
+Use any real block device (disk, partition, or loop device):
+
+```bash
+# Example using a loop device
+sudo dd if=/dev/zero of=/tmp/test.img bs=1M count=1024
+sudo losetup /dev/loop0 /tmp/test.img
+```
+
+### Step 2: Create a dmp Device
+Create a dmp device on top of the physical block device:
+
+```bash
+# Get device size in sectors (512 bytes)
+SIZE=$(sudo blockdev --getsz /dev/loop0)
+
+# Create the dmp device
+sudo dmsetup create dmp1 --table "0 $SIZE dmp /dev/loop0"
+
+# Verify
+ls -l /dev/mapper/dmp1
+```
+
+> 💡 `dmp` works directly with physical block devices — not on top of other DM targets.
+
+### Step 3: Generate Workload
+```bash
+# Write
+sudo dd if=/dev/random of=/dev/mapper/dmp1 bs=4k count=100 conv=fsync
+
+# Read
+sudo dd if=/dev/mapper/dmp1 of=/dev/null bs=4k count=100
+```
+
+### Step 4: View Statistics
+```bash
+cat /sys/module/dmp/stat/volumes
+```
+
+Expected output:
+```
+read: reqs: 100 avg size: 4096
+write: reqs: 100 avg size: 4096
+total: reqs: 200 avg size: 4096
+```
+
+---
+
+## Architecture
+
+`dmp` is a **standalone** Device Mapper target:
+- Registers via `dm_register_target()`
+- Handles I/O by forwarding bios directly to the underlying physical device
+- Collects atomic, thread-safe statistics in the bio completion path
+- Exports metrics via `sysfs` (`/sys/module/dmp/stat/volumes`)
+
+---
+
+## Project Structure
+
+```
+Device-mapper-proxy/
+├── Makefile
+├── dmp.c                    # Kernel module source code
+├── dmp.h                    # Header file
+├── README.md
+├── scripts/
+│   ├── load.sh
+│   ├── test.sh
+│   └── cleanup.sh
+└── docs/
+    └── ARCHITECTURE.md
+```
+
+---
+
+## Limitations
+
+- Statistics reset on module reload
+- Currently supports a single volume (extendable)
+- No persistent storage of metrics
+
+---
+
+## Future Plans
+
+### 1. Block Size Distribution Histogram
+
+Instead of a single average block size, I/O requests will be categorized into size ranges (buckets), with a counter maintained for each bucket. This provides a much more detailed view of the workload pattern.
+
+**Planned sysfs interface:**
+```
+/sys/module/dmp/stat/volumes/size_dist
+```
+
+**Example output:**
+```
+0–4K:      1250
+4K–16K:     430
+16K–64K:     85
+64K–256K:    12
+>256K:        3
+```
+
+This histogram will help identify:
+- Dominant I/O sizes in the workload
+- Presence of large sequential scans vs small random I/O
+- Suboptimal application I/O patterns (e.g., too many tiny requests)
+
+---
+
+### 2. I/O Latency Statistics
+
+Per-operation latency tracking with min, max, and average values, measured separately for reads and writes.
+
+**Planned sysfs interface:**
+```
+/sys/module/dmp/stat/volumes/latency
+```
+
+**Example output:**
+```
+read:  min: 12us  max: 3500us  avg: 145us
+write: min: 18us  max: 8200us  avg: 230us
+```
+
+Latency metrics will enable:
+- Detection of storage performance degradation
+- SLA monitoring for latency-sensitive applications
+- Identification of outlier slow I/O operations
+- Benchmarking and performance regression testing
+- 
+---
+
+## 📄 License
+
+**GPL v2**, in accordance with Linux kernel licensing policy.
+
+---
