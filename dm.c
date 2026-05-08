@@ -87,7 +87,6 @@ static int dmp_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 static void dmp_dtr(struct dm_target *ti)
 {
 	struct dmp_c *dmp = ti->private;
-
 	dm_put_device(ti, dmp->dev);
 	kfree(dmp);
 }
@@ -105,23 +104,6 @@ static int dmp_map(struct dm_target *ti, struct bio *bio)
 static void dmp_status(struct dm_target *ti, status_type_t type,
 					   unsigned int status_flags, char *result, unsigned int maxlen)
 {
-	struct dmp_c *dmp = ti->private;
-	size_t sz = 0;
-
-	switch (type)
-	{
-	case STATUSTYPE_INFO:
-		result[0] = '\0';
-		break;
-	case STATUSTYPE_TABLE:
-		DMEMIT("%s %llu", dmp->dev->name, (unsigned long long)dmp->start);
-		break;
-	case STATUSTYPE_IMA:
-		DMEMIT_TARGET_NAME_VERSION(ti->type);
-		DMEMIT(",device_name=%s,start=%llu;", dmp->dev->name,
-			   (unsigned long long)dmp->start);
-		break;
-	}
 }
 
 static int dmp_iterate_devices(struct dm_target *ti,
@@ -155,7 +137,6 @@ static int __init dmp_init(void)
 
 	/*тут будет создание sysfs: /sys/module/dmp/stat */
 
-	/* Инициализация глобальной статистики */
 	atomic64_set(&global_stats.read_reqs, 0);
 	atomic64_set(&global_stats.read_bytes, 0);
 	atomic64_set(&global_stats.write_reqs, 0);
