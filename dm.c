@@ -147,16 +147,37 @@ static sector_t dmp_map_sector(struct dm_target *ti, sector_t bi_sector)
 
 static int dmp_map(struct dm_target *ti, struct bio *bio)
 {
+	struct dmp_c *dmp = ti->private;
+	bio_set_dev(bio, dmp->dev->bdev);
+	
+	bio->bi_iter.bi_sector = dmp->start + dm_target_offset(ti, bio->bi_iter.bi_sector);
+	if (bio_data_dir(bio) == READ) {
+		atomic64_inc(&global_stats.read_reqs);
+		atomic64_add(bio->bi_iter.bi_size, &global_stats.read_bytes);
+	} else {
+		atomic64_inc(&global_stats.write_reqs);
+		atomic64_add(bio->bi_iter.bi_size, &global_stats.write_bytes);
+	}
+
+	return DM_MAPIO_REMAPPED;
 }
 
 static void dmp_status(struct dm_target *ti, status_type_t type,
 					   unsigned int status_flags, char *result, unsigned int maxlen)
 {
-	struct dm_targe
-	{
-		/* data */
-	};
-	
+	struct dmp_c *dmp = ti->private;
+	switch (type) {
+	case STATUSTYPE_INFO:
+		result[0] = '\0';
+		break;
+	case STATUSTYPE_TABLE:
+		if (dmp->start == 0) {
+			snprintf(result, maxlen, "%s", dmp->dev->name);
+		} else {
+			snprintf(result, maxlen, "%s %llu", dmp->dev->name, (unsigned long long)dmp->start);
+		}
+		break;
+	}
 }
 
 static int dmp_iterate_devices(struct dm_target *ti,
@@ -182,21 +203,38 @@ static int __init dmp_init(void)
 {
 	int r;
 	r = dm_register_target(&dmp_target);
-	if (r < 0)
-	{
+	if (r < 0) {
 		DMERR("register failed %d", r);
 		return r;
 	}
 
-	/*тут будет создание sysfs: /sys/module/dmp/stat */
+	dmp_kobj = kobject_create_and_add("stat", &THIS_MODULE->mkobj.kobj);
+	if (!dmp_kobj) {
+		DMERR("Failed to create sysfs directory 'stat'");
+		r = -ENOMEM;
+		goto err_unregister_dm;
+	}
+
+	r = sysfs_create_group(dmp_kobj, &dmp_attr_group);
+	if (r) {
+		DMERR("Failed to create sysfs group");
+		goto err_put_kobj;
+	}
 
 	atomic64_set(&global_stats.read_reqs, 0);
 	atomic64_set(&global_stats.read_bytes, 0);
 	atomic64_set(&global_stats.write_reqs, 0);
 	atomic64_set(&global_stats.write_bytes, 0);
 
-	pr_info("dmp: module loaded\n");
+	pr_info("dmp: module loaded successfully\n");
 	return 0;
+
+err_put_kobj:
+	kobject_put(dmp_kobj);
+	dmp_kobj = NULL;
+err_unregister_dm:
+	dm_unregister_target(&dmp_target);
+	return r;
 }
 
 static void __exit dmp_exit(void)
