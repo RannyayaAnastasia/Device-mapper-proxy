@@ -139,12 +139,6 @@ static void dmp_dtr(struct dm_target *ti)
 	kfree(dmp);
 }
 
-static sector_t dmp_map_sector(struct dm_target *ti, sector_t bi_sector)
-{
-	struct dmp_c *dmp = ti->private;
-	return dmp->start + dm_target_offset(ti, bi_sector);
-}
-
 static int dmp_map(struct dm_target *ti, struct bio *bio)
 {
 	struct dmp_c *dmp = ti->private;
@@ -249,9 +243,7 @@ static void __exit dmp_exit(void)
 	pr_info("dmp: module unloaded\n");
 }
 
-module_init(dmp_init);
 module_exit(dmp_exit);
-
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("dm:dmp");
 MODULE_DESCRIPTION("Device Mapper Proxy with I/O statistics");
