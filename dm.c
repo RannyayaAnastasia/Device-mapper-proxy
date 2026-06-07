@@ -239,7 +239,14 @@ err_unregister_dm:
 
 static void __exit dmp_exit(void)
 {
+	if (dmp_kobj) {
+		sysfs_remove_group(dmp_kobj, &dmp_attr_group);
+		kobject_put(dmp_kobj);
+		dmp_kobj = NULL;
+	}
+
 	dm_unregister_target(&dmp_target);
+	pr_info("dmp: module unloaded\n");
 }
 
 module_init(dmp_init);
