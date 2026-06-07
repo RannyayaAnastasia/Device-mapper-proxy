@@ -82,6 +82,54 @@ static struct attribute_group dmp_attr_group = {
 
 static int dmp_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 {
+	struct dmp_c *dmp;
+	int ret;
+
+	if (argc < 1 || argc > 2) {
+		ti->error = "dmp: Invalid argument count. Usage: dmp <dev_path> [physical_offset]";
+		return -EINVAL;
+	}
+
+	dmp = kzalloc(sizeof(*dmp), GFP_KERNEL);
+	if (!dmp) {
+		ti->error = "dmp: Memory allocation failed";
+		return -ENOMEM;
+	}
+
+	ret = dm_get_device(ti, argv[0], dm_table_get_mode(ti->table), &dmp->dev);
+	if (ret) {
+		ti->error = "dmp: Device lookup failed";
+		goto err_free;
+	}
+
+	if (argc == 2) {
+		if (kstrtoull(argv[1], 10, (unsigned long long *)&dmp->start) != 0) {
+			ti->error = "dmp: Invalid physical offset";
+			goto err_bad;
+		}
+	} else {
+		dmp->start = 0;
+	}
+
+	atomic64_set(&dmp->stats.read_reqs, 0);
+	atomic64_set(&dmp->stats.read_bytes, 0);
+	atomic64_set(&dmp->stats.write_reqs, 0);
+	atomic64_set(&dmp->stats.write_bytes, 0);
+
+	ti->private = dmp;
+
+	ti->num_flush_bios = 1;
+	ti->num_discard_bios = 1;
+	ti->num_write_same_bios = 1;
+	ti->num_write_zeroes_bios = 1;
+
+	return 0;
+
+err_bad:
+	dm_put_device(ti, dmp->dev);
+err_free:
+	kfree(dmp);
+	return ret;
 }
 
 static void dmp_dtr(struct dm_target *ti)
@@ -104,6 +152,11 @@ static int dmp_map(struct dm_target *ti, struct bio *bio)
 static void dmp_status(struct dm_target *ti, status_type_t type,
 					   unsigned int status_flags, char *result, unsigned int maxlen)
 {
+	struct dm_targe
+	{
+		/* data */
+	};
+	
 }
 
 static int dmp_iterate_devices(struct dm_target *ti,
@@ -148,6 +201,7 @@ static int __init dmp_init(void)
 
 static void __exit dmp_exit(void)
 {
+	dm_unregister_target(&dmp_target);
 }
 
 module_init(dmp_init);
