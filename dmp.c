@@ -111,11 +111,6 @@ static int dmp_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		dmp->start = 0;
 	}
 
-	atomic64_set(&dmp->stats.read_reqs, 0);
-	atomic64_set(&dmp->stats.read_bytes, 0);
-	atomic64_set(&dmp->stats.write_reqs, 0);
-	atomic64_set(&dmp->stats.write_bytes, 0);
-
 	ti->private = dmp;
 
 	ti->num_flush_bios = 1;
@@ -144,13 +139,14 @@ static void dmp_dtr(struct dm_target *ti)
 static int dmp_map(struct dm_target *ti, struct bio *bio)
 {
 	struct dmp_c *dmp = ti->private;
-	bio_set_dev(bio, dmp->dev->bdev);
 	
+	bio_set_dev(bio, dmp->dev->bdev);
 	bio->bi_iter.bi_sector = dmp->start + dm_target_offset(ti, bio->bi_iter.bi_sector);
-	if (bio_data_dir(bio) == READ) {
+
+	if (bio_op(bio) == REQ_OP_READ) {
 		atomic64_inc(&global_stats.read_reqs);
 		atomic64_add(bio->bi_iter.bi_size, &global_stats.read_bytes);
-	} else {
+	} else if (bio_op(bio) == REQ_OP_WRITE) {
 		atomic64_inc(&global_stats.write_reqs);
 		atomic64_add(bio->bi_iter.bi_size, &global_stats.write_bytes);
 	}
