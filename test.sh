@@ -97,4 +97,3 @@ else
 fi
 
 echo -e "\n${GREEN}=== Testing completed successfully ===${NC}"
-```
