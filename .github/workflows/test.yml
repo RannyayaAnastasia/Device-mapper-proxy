@@ -1,0 +1,52 @@
+name: DMP Kernel Module Tests
+
+on:
+  push:
+    branches: [ "main", "module_development" ]
+  pull_request:
+    branches: [ "main", "module_development" ]
+
+jobs:
+  test-on-vm:
+    runs-on: self-hosted 
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (Fedora)
+      run: |
+        sudo dnf install -y make gcc kmod device-mapper
+        sudo dnf install -y /home/twinky/kernel-6.18.13/kernel-devel-$(uname -r).rpm || true
+
+    - name: Build kernel module
+      run: |
+        KDIR="/usr/src/kernels/$(uname -r)"
+        if [ ! -L "/lib/modules/$(uname -r)/build" ]; then
+          sudo ln -s $KDIR /lib/modules/$(uname -r)/build
+        fi
+        
+        make KDIR=$KDIR MODULE_NAME=dmp
+
+    - name: Run integration tests
+      run: |
+        echo "=== Preparing environment for tests ==="
+        
+        sudo setenforce 0 || true
+        echo "SELinux status: $(getenforce)"
+        
+        chmod +x test.sh
+        echo "=== Starting test.sh ==="
+        sudo bash test.sh
+        
+    - name: Final Safety Cleanup (if test.sh failed abruptly)
+      if: always()
+      run: |
+        echo "Running final safety cleanup..."
+        sudo dmsetup remove dmp_test || true
+        sudo dmsetup remove dmp_fail1 || true
+        sudo losetup -D || true
+        sudo rmmod dmp || true
+        sudo rm -f /tmp/dmp_test.img || true
+        sudo rm -f /tmp/test.img || true
+        echo "Cleanup complete."
