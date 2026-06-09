@@ -41,7 +41,7 @@ echo -e "${GREEN}Module loaded successfully.${NC}"
 echo -e "\n${YELLOW}[3/6] Creating test block device (10 MB)...${NC}"
 dd if=/dev/zero of="$IMG_FILE" bs=1M count=10 status=none
 LOOP_DEV=$(sudo losetup -f --show "$IMG_FILE")
-TOTAL_SIZE=$(sudo blockdev --getsz "$LOOP_DEV") # Размер в 512-байтных секторах
+TOTAL_SIZE=$(sudo blockdev --getsz "$LOOP_DEV")
 
 echo -e "\n${YELLOW}[4/6] Running test scenarios...${NC}"
 
