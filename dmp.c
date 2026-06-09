@@ -16,20 +16,10 @@
 
 #define DM_MSG_PREFIX "dmp"
 
-/* Structure for statistics */
-struct dmp_stats
-{
-	atomic64_t read_reqs;
-	atomic64_t read_bytes;
-	atomic64_t write_reqs;
-	atomic64_t write_bytes;
-};
-
 struct dmp_c
 {
 	struct dm_dev *dev;
 	sector_t start;
-	struct dmp_stats stats;
 };
 
 static struct dmp_stats global_stats;

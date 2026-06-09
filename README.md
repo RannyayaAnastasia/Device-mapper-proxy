@@ -1,24 +1,29 @@
+---
+
+### README.md
+
+```markdown
 # Device Mapper Proxy (dmp) — Kernel Module
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 [![Platform: Linux Kernel](https://img.shields.io/badge/Kernel-6.18.13-blue)](https://www.kernel.org)
 
-A Linux kernel module implementing a Device Mapper target called **dmp** (device mapper proxy). The module creates virtual block devices on top of existing physical block devices and transparently proxies all I/O requests, while simultaneously collecting I/O operation statistics.
+A Linux kernel module implementing a Device Mapper target called **dmp** (device mapper proxy). The module creates virtual block devices on top of existing physical block devices and transparently proxies all I/O requests, while simultaneously collecting **global** I/O operation statistics (aggregated across all active `dmp` devices).
 
 ---
 
 ## 📊 Supported Statistics
 
-Statistics are available in real time via the `sysfs` interface:
+**Global** statistics (aggregated across all active `dmp` devices) are available in real time via the `sysfs` interface:
 
 | Metric | Description |
 |--------|-------------|
-| `read: reqs` | Number of read requests |
-| `read: avg size` | Average read block size (bytes) |
-| `write: reqs` | Number of write requests |
-| `write: avg size` | Average write block size (bytes) |
-| `total: reqs` | Total number of requests |
-| `total: avg size` | Average block size (all operations) |
+| `read: reqs` | Total number of read requests (all devices) |
+| `read: avg size` | Average read block size in bytes (all devices) |
+| `write: reqs` | Total number of write requests (all devices) |
+| `write: avg size` | Average write block size in bytes (all devices) |
+| `total: reqs` | Total number of requests (all devices) |
+| `total: avg size` | Average block size for all operations (all devices) |
 
 Example output:
 ```bash
@@ -92,7 +97,7 @@ sudo dmsetup create dmp1 --table "0 $SIZE dmp /dev/loop0"
 ls -l /dev/mapper/dmp1
 ```
 
-> 💡 `dmp` works directly with physical block devices — not on top of other DM targets.
+> `dmp` works directly with physical block devices — not on top of other DM targets.
 
 ### Step 3: Generate Workload
 ```bash
@@ -103,7 +108,7 @@ sudo dd if=/dev/random of=/dev/mapper/dmp1 bs=4k count=100 conv=fsync
 sudo dd if=/dev/mapper/dmp1 of=/dev/null bs=4k count=100
 ```
 
-### Step 4: View Statistics
+### Step 4: View Global Statistics
 ```bash
 cat /sys/module/dmp/stat/volumes
 ```
@@ -122,8 +127,8 @@ total: reqs: 200 avg size: 4096
 `dmp` is a **standalone** Device Mapper target:
 - Registers via `dm_register_target()`
 - Handles I/O by forwarding bios directly to the underlying physical device
-- Collects atomic, thread-safe statistics in the bio completion path
-- Exports metrics via `sysfs` (`/sys/module/dmp/stat/volumes`)
+- Collects atomic, thread-safe **global** statistics in the bio mapping path
+- Exports aggregated metrics via `sysfs` (`/sys/module/dmp/stat/volumes`)
 
 ---
 
@@ -135,20 +140,17 @@ Device-mapper-proxy/
 ├── dmp.c                    # Kernel module source code
 ├── dmp.h                    # Header file
 ├── README.md
-├── scripts/
-│   ├── load.sh
-│   ├── test.sh
-│   └── cleanup.sh
+├── test.sh
 └── docs/
-    └── ARCHITECTURE.md
+    └── dmp.rst
 ```
 
 ---
 
 ## Limitations
 
-- Statistics reset on module reload
-- Currently supports a single volume (extendable)
+- Statistics are **global** and reset entirely on module reload
+- Currently supports a single volume mapping per device (extendable)
 - No persistent storage of metrics
 
 ---
@@ -156,5 +158,5 @@ Device-mapper-proxy/
 ## License
 
 **GPL v2**, in accordance with Linux kernel licensing policy.
+```
 
----
