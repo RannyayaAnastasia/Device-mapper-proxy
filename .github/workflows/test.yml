@@ -17,7 +17,6 @@ jobs:
     - name: Install dependencies (Fedora)
       run: |
         sudo dnf install -y make gcc kmod device-mapper
-        
         sudo dnf install -y /home/twinky/kernel-6.18.13/kernel-devel-$(uname -r).rpm || true
 
     - name: Build kernel module
@@ -27,56 +26,27 @@ jobs:
           sudo ln -s $KDIR /lib/modules/$(uname -r)/build
         fi
         
-        make KDIR=$KDIR
+        make KDIR=$KDIR MODULE_NAME=dmp
 
     - name: Run integration tests
-      id: tests
       run: |
-        sudo dmsetup remove dmp_test || true
-        sudo losetup -D || true
-        sudo rmmod dmp || true
+        echo "=== Preparing environment for tests ==="
         
-        echo "Current SELinux status: $(getenforce)"
         sudo setenforce 0 || true
-        echo "SELinux status after change: $(getenforce)"
+        echo "SELinux status: $(getenforce)"
         
-        sudo dmesg | grep -iE 'dmp|insmod|denied|lockdown' || echo "No specific dmesg errors found"        
-        sudo insmod dmp.ko
-        lsmod | grep dmp
+        chmod +x test.sh
+        echo "=== Starting test.sh ==="
+        sudo bash test.sh
         
-        sudo dd if=/dev/zero of=/tmp/test.img bs=1M count=100
-        LOOP_DEV=$(sudo losetup -f --show /tmp/test.img)
-        echo "LOOP_DEV=$LOOP_DEV" >> $GITHUB_ENV
-        echo "Using loop device: $LOOP_DEV"
-        
-        SIZE=$(sudo blockdev --getsz $LOOP_DEV)
-        sudo dmsetup create dmp_test --table "0 $SIZE dmp $LOOP_DEV"
-        
-        sudo dd if=/dev/urandom of=/dev/mapper/dmp_test bs=4k count=100 conv=fsync
-        sudo dd if=/dev/mapper/dmp_test of=/dev/null bs=4k count=100
-        
-        echo "--- Global Statistics ---"
-        cat /sys/module/dmp/stat/volumes
-        
-        STATS=$(cat /sys/module/dmp/stat/volumes)
-        if echo "$STATS" | grep -q "read: reqs: 100"; then
-          echo " Test passed: Stats are correct!"
-        else
-          echo "Test failed: Stats do not match expected values."
-          exit 1
-        fi
-
-    - name: Cleanup environment
+    - name: Final Safety Cleanup (if test.sh failed abruptly)
       if: always()
       run: |
-        echo "Cleaning up resources..."
+        echo "Running final safety cleanup..."
         sudo dmsetup remove dmp_test || true
-        
-        if [ -n "$LOOP_DEV" ]; then
-          sudo losetup -d $LOOP_DEV || true
-        fi
-        sudo losetup -D || true 
-        
-        rm -f /tmp/test.img
+        sudo dmsetup remove dmp_fail1 || true
+        sudo losetup -D || true
         sudo rmmod dmp || true
+        sudo rm -f /tmp/dmp_test.img || true
+        sudo rm -f /tmp/test.img || true
         echo "Cleanup complete."
