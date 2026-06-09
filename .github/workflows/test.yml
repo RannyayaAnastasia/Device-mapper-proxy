@@ -35,11 +35,12 @@ jobs:
         sudo dmsetup remove dmp_test || true
         sudo losetup -D || true
         sudo rmmod dmp || true
-        echo "--- Checking dmp.ko file ---"
-        ls -l dmp.ko
-        echo "--- Checking kernel logs for rejection reasons ---"
-        sudo dmesg | tail -n 15
         
+        echo "Current SELinux status: $(getenforce)"
+        sudo setenforce 0 || true
+        echo "SELinux status after change: $(getenforce)"
+        
+        sudo dmesg | grep -iE 'dmp|insmod|denied|lockdown' || echo "No specific dmesg errors found"        
         sudo insmod dmp.ko
         lsmod | grep dmp
         
