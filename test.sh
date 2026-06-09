@@ -67,8 +67,17 @@ fi
 
 echo "  -> Test D: Checking final statistics"
 echo "    Contents of /sys/module/dmp/stat/volumes:"
-cat /sys/module/dmp/stat/volumes | sed 's/^/    /'
-echo -e "${GREEN}[PASS]${NC} Statistics read successfully."
+STATS=$(cat /sys/module/dmp/stat/volumes)
+echo "$STATS" | sed 's/^/    /'
+
+if echo "$STATS" | grep -qE "read: reqs: ([1-9]|[1-9][0-9]|1[0-4][0-9])"; then
+    echo -e "${GREEN}[PASS]${NC} Statistics are valid (read requests detected)."
+else
+    echo -e "${RED}[FAIL]${NC} Statistics are invalid or zero!"
+    echo "Expected to see read requests, but got:"
+    echo "$STATS"
+    exit 1
+fi
 
 echo -e "\n${YELLOW}[5/6] Final cleanup and module unload...${NC}"
 
