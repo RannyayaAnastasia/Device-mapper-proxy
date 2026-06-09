@@ -1,0 +1,77 @@
+name: DMP Kernel Module Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test-on-vm:
+    runs-on: self-hosted 
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (Fedora)
+      run: |
+        sudo dnf install -y make gcc kmod device-mapper
+        
+        sudo dnf install -y /home/twinky/kernel-6.18.13/kernel-devel-$(uname -r).rpm || true
+
+    - name: Build kernel module
+      run: |
+        KDIR="/usr/src/kernels/$(uname -r)"
+        if [ ! -L "/lib/modules/$(uname -r)/build" ]; then
+          sudo ln -s $KDIR /lib/modules/$(uname -r)/build
+        fi
+        
+        make KDIR=$KDIR
+
+    - name: Run integration tests
+      id: tests
+      run: |
+        sudo dmsetup remove dmp_test || true
+        sudo losetup -D || true
+        sudo rmmod dmp || true
+        
+        sudo insmod dmp.ko
+        lsmod | grep dmp
+        
+        sudo dd if=/dev/zero of=/tmp/test.img bs=1M count=100
+        LOOP_DEV=$(sudo losetup -f --show /tmp/test.img)
+        echo "LOOP_DEV=$LOOP_DEV" >> $GITHUB_ENV
+        echo "Using loop device: $LOOP_DEV"
+        
+        SIZE=$(sudo blockdev --getsz $LOOP_DEV)
+        sudo dmsetup create dmp_test --table "0 $SIZE dmp $LOOP_DEV"
+        
+        sudo dd if=/dev/urandom of=/dev/mapper/dmp_test bs=4k count=100 conv=fsync
+        sudo dd if=/dev/mapper/dmp_test of=/dev/null bs=4k count=100
+        
+        echo "--- Global Statistics ---"
+        cat /sys/module/dmp/stat/volumes
+        
+        STATS=$(cat /sys/module/dmp/stat/volumes)
+        if echo "$STATS" | grep -q "read: reqs: 100"; then
+          echo " Test passed: Stats are correct!"
+        else
+          echo "Test failed: Stats do not match expected values."
+          exit 1
+        fi
+
+    - name: Cleanup environment
+      if: always()
+      run: |
+        echo "Cleaning up resources..."
+        sudo dmsetup remove dmp_test || true
+        
+        if [ -n "$LOOP_DEV" ]; then
+          sudo losetup -d $LOOP_DEV || true
+        fi
+        sudo losetup -D || true 
+        
+        rm -f /tmp/test.img
+        sudo rmmod dmp || true
+        echo "Cleanup complete."
