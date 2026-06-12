@@ -154,5 +154,3 @@ Device-mapper-proxy/
 ## License
 
 **GPL v2**, in accordance with Linux kernel licensing policy.
-```
-
