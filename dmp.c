@@ -200,7 +200,7 @@ static int __init dmp_init(void)
 	
 	rс = dm_register_target(&dmp_target);
 	if (rс < 0) {
-		DMERR("register failed %d", r);
+		DMERR("register failed %d", rc);
 		return rс;
 	}
 
