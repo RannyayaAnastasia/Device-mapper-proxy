@@ -196,22 +196,23 @@ static struct target_type dmp_target = {
 
 static int __init dmp_init(void)
 {
-	int r;
-	r = dm_register_target(&dmp_target);
-	if (r < 0) {
-		DMERR("register failed %d", r);
-		return r;
+	int rc;
+	
+	rc = dm_register_target(&dmp_target);
+	if (rc < 0) {
+		DMERR("register failed %d", rc);
+		return rc;
 	}
 
 	dmp_kobj = kobject_create_and_add("stat", &THIS_MODULE->mkobj.kobj);
 	if (!dmp_kobj) {
 		DMERR("Failed to create sysfs directory 'stat'");
-		r = -ENOMEM;
+		rc = -ENOMEM;
 		goto err_unregister_dm;
 	}
 
-	r = sysfs_create_group(dmp_kobj, &dmp_attr_group);
-	if (r) {
+	rc = sysfs_create_group(dmp_kobj, &dmp_attr_group);
+	if (rc) {
 		DMERR("Failed to create sysfs group");
 		goto err_put_kobj;
 	}
@@ -229,7 +230,7 @@ err_put_kobj:
 	dmp_kobj = NULL;
 err_unregister_dm:
 	dm_unregister_target(&dmp_target);
-	return r;
+	return rc;
 }
 
 static void __exit dmp_exit(void)
