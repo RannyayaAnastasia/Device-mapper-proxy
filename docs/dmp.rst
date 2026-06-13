@@ -46,10 +46,10 @@ Example scripts
   # Generate a simple workload and check how the proxy counted it
 
   # Write 100 blocks of 4k
-  dd if=/dev/urandom of=/dev/mapper/$1 bs=4k count=100 conv=fsync
+  dd if=/dev/urandom of=/dev/mapper/$1 bs=4k count=100 conv=fsync oflag=direct
 
   # Read 100 blocks of 4k
-  dd if=/dev/mapper/$1 of=/dev/null bs=4k count=100
+  dd if=/dev/mapper/$1 of=/dev/null bs=4k count=100 iflag=direct
 
   # Verify global statistics
   echo "--- Global Proxy Statistics ---"
